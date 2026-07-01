@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -203,6 +204,7 @@ const REGION_ORDER=['北市北區','三五八蘆區','來賓'];
 const ROLE_ORDER=['大區董','區董','區董(準)','董顧','董顧/大使','大使','大使(準)','助理大使'];
 let MEETINGS=[], STAFF=[], PEOPLE=[], curId=null;
 let staff=localStorage.getItem('ateam_checkin_staff')||'', q='', suppressUntil=0;
+let pending={};  // 本機剛操作、等後端確認的項目，避免同步把它蓋回舊值
 const $=s=>document.querySelector(s);
 const notSet=()=>API.startsWith('請貼上');
 function nowHHMM(){const d=new Date(),p=n=>String(n).padStart(2,'0');return p(d.getHours())+':'+p(d.getMinutes());}
@@ -220,7 +222,15 @@ async function boot(){
     else{updateMsel();render();openMeet();}
   }catch(e){banner('連線失敗，請確認後端網址與部署權限');}
 }
-async function loadMeeting(){if(!curId)return;try{const d=await api({action:'meeting',id:curId});if(d.ok){PEOPLE=d.people;reindex();render();hideBanner();}}catch(e){}}
+async function loadMeeting(){if(!curId)return;try{const d=await api({action:'meeting',id:curId});if(!d.ok)return;
+  const now=Date.now();
+  d.people.forEach(sp=>{const pd=pending[sp.name];if(!pd)return;
+    if(now>pd.until){delete pending[sp.name];return;}                 // 逾時就放行
+    const consistent=(sp.status===pd.status)&&(sp.paid===pd.paid);
+    if(consistent){delete pending[sp.name];}                          // 後端已跟上，解除保護
+    else{sp.status=pd.status;sp.paid=pd.paid;if(pd.time)sp.time=pd.time;} // 尚未跟上，保留本機值
+  });
+  PEOPLE=d.people;reindex();render();hideBanner();}catch(e){}}
 function poll(){if(!notSet()&&curId&&Date.now()>suppressUntil)loadMeeting();}
 
 /* 報到 / 代理 / 收費 —— 樂觀更新後送出 */
@@ -234,13 +244,16 @@ function tapProxy(i){if(!staff){openStaff();return;}const p=PEOPLE[i];if(!p)retu
   applyMark(p,ns);}
 function applyMark(p,ns){
   p.status=ns;if(ns==='未到'){p.paid=false;p.time='';}else if(!p.time)p.time=nowHHMM();
+  pending[p.name]={status:p.status,paid:p.paid,time:p.time,until:Date.now()+15000};
   suppressUntil=Date.now()+8000;render();
   api({action:'mark',id:curId,name:p.name,status:ns,staff}).then(d=>{if(!d.ok)banner(d.error||'剛剛那筆未送出');else hideBanner();}).catch(()=>banner('連線不穩，稍後會自動同步'));
 }
 function tapPay(i){if(!staff){openStaff();return;}const p=PEOPLE[i];if(!p)return;
   if(!p.status||p.status==='未到'){toast('請先標記本人或代理報到');return;}
   if(p.paid&&!confirm('取消 '+p.name+' 的收費？'))return;
-  const np=!p.paid;p.paid=np;suppressUntil=Date.now()+8000;render();
+  const np=!p.paid;p.paid=np;
+  pending[p.name]={status:p.status,paid:p.paid,time:p.time,until:Date.now()+15000};
+  suppressUntil=Date.now()+8000;render();
   api({action:'pay',id:curId,name:p.name,paid:np?'1':'0',staff}).then(d=>{if(!d.ok)banner(d.error||'剛剛那筆未送出');else hideBanner();}).catch(()=>banner('連線不穩，稍後會自動同步'));
 }
 
