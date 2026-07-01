@@ -63,6 +63,7 @@
   <div class="filters">
     <select id="fRange"><option value="all">全部場次</option><option value="6">近 6 場</option><option value="3">近 3 場</option></select>
     <select id="fRegion"><option value="all">全部區域</option><option value="北市北區">北市北區</option><option value="三五八蘆區">三五八蘆區</option></select>
+    <button id="btnCard" onclick="exportCard()" style="border:1px solid var(--gold);background:#FBF6EA;color:#9A7A2E;border-radius:11px;padding:10px 15px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">📤 匯出圖卡</button>
   </div>
   <div class="kpis" id="kpis"></div>
   <div class="grid">
@@ -201,5 +202,109 @@ $('#fRegion').addEventListener('change',e=>{region=e.target.value;draw();});
 $('#tSearch').addEventListener('input',e=>{tQ=e.target.value;draw();});
 load();
 </script>
+
+<script>
+function exportCard(){
+  const {ms,recs}=scope();
+  if(!ms.length){alert('這個範圍沒有資料');return;}
+  // 彙整
+  const tot=recs.length;
+  const self=recs.filter(r=>r.status==='本人').length;
+  const proxy=recs.filter(r=>r.status==='代理').length;
+  const present=self+proxy, paid=recs.filter(r=>r.status!=='未到'&&r.paid==='已收').length;
+  const rate=n=>tot?Math.round(n/tot*100):0;
+  const payRate=present?Math.round(paid/present*100):0;
+  // 標題文字
+  let title, sub;
+  if(range.indexOf('m:')===0){const m=ms[0];title=m.meeting;sub=m.date;}
+  else{title=(regionLabel())+' 出席戰報';sub=ms.length+' 場（'+ms[0].date+' ~ '+ms[ms.length-1].date+'）';}
+  // 各區
+  const REGIONS=['北市北區','三五八蘆區'];
+  const regRows=REGIONS.map(rg=>{const rr=recs.filter(r=>r.region===rg);const p=rr.filter(r=>r.status!=='未到').length;return {name:rg,present:p,tot:rr.length,rate:rr.length?Math.round(p/rr.length*100):0};}).filter(x=>x.tot>0);
+
+  // ---- 畫布 ----
+  const W=1080, dpr=2;
+  const c=document.createElement('canvas');
+  const ctx=c.getContext('2d');
+  const H = 610 + regRows.length*130 + 120;
+  c.width=W*dpr; c.height=H*dpr; ctx.scale(dpr,dpr);
+  const CO={bg:'#FAFAF7',card:'#FFFFFF',ink:'#1B1B1A',mut:'#8C887E',line:'#ECE8DF',gold:'#C9A24B',green:'#1FA463',proxy:'#C9862B',red:'#C8102E'};
+  // 底
+  ctx.fillStyle=CO.bg; ctx.fillRect(0,0,W,H);
+  // 頂條
+  ctx.fillStyle=CO.gold; ctx.fillRect(0,0,W,10);
+  const F=(w,s)=>w+'px \'Noto Sans TC\', sans-serif'; // helper
+  ctx.textBaseline='alphabetic';
+  // 眉標
+  ctx.fillStyle=CO.gold; ctx.font='700 '+F(26); ctx.fillText('A-TEAM 董顧大使團',60,80);
+  // 標題
+  ctx.fillStyle=CO.ink; ctx.font='900 '+F(58); ctx.fillText(title,60,148);
+  ctx.fillStyle=CO.mut; ctx.font='500 '+F(28); ctx.fillText(sub,60,192);
+
+  // 頂部摘要：單場看人數、多場看平均出席率
+  ctx.font='800 '+F(30);
+  const isSingle=(range.indexOf('m:')===0);
+  if(isSingle){
+    ctx.fillStyle=CO.mut; ctx.fillText('應到 ',60,246);
+    let wx=60+ctx.measureText('應到 ').width;
+    ctx.fillStyle=CO.ink; ctx.fillText(tot+' 人',wx,246);
+    wx+=ctx.measureText(tot+' 人').width;
+    ctx.fillStyle=CO.mut; ctx.fillText('   ·   實到 ',wx,246);
+    wx+=ctx.measureText('   ·   實到 ').width;
+    ctx.fillStyle=CO.green; ctx.fillText(present+' 人',wx,246);
+  }else{
+    ctx.fillStyle=CO.mut; ctx.fillText('平均出席率 ',60,246);
+    let wx=60+ctx.measureText('平均出席率 ').width;
+    ctx.fillStyle=CO.green; ctx.fillText(rate(present)+'%',wx,246);
+    wx+=ctx.measureText(rate(present)+'%').width;
+    ctx.fillStyle=CO.mut; ctx.fillText('   ·   共 '+ms.length+' 場',wx,246);
+  }
+
+  // 大數字四宮格
+  const gx=60, gy=286, gw=(W-120-30)/2, gh=150;
+  const cells=[
+    ['總到席率',rate(present)+'%',CO.green],
+    ['本人出席率',rate(self)+'%',CO.green],
+    ['代理',proxy+' 位',CO.proxy],
+    ['收費完成率',payRate+'%',CO.green]
+  ];
+  cells.forEach((cell,i)=>{
+    const x=gx+(i%2)*(gw+30), y=gy+Math.floor(i/2)*(gh+22);
+    roundRect(ctx,x,y,gw,gh,20); ctx.fillStyle=CO.card; ctx.fill();
+    ctx.strokeStyle=CO.line; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle=cell[2]; ctx.font='900 '+F(72); ctx.fillText(cell[1],x+30,y+92);
+    ctx.fillStyle=CO.mut; ctx.font='700 '+F(26); ctx.fillText(cell[0],x+30,y+128);
+  });
+
+  // 各區
+  let yy=gy+2*gh+44+40;
+  ctx.fillStyle=CO.ink; ctx.font='800 '+F(30); ctx.fillText('各區出席率',60,yy); yy+=20;
+  regRows.forEach(rr=>{
+    const bx=60,bw=W-120,bh=96,by=yy;
+    roundRect(ctx,bx,by,bw,bh,18); ctx.fillStyle=CO.card; ctx.fill(); ctx.strokeStyle=CO.line; ctx.stroke();
+    ctx.fillStyle=CO.ink; ctx.font='800 '+F(32); ctx.fillText(rr.name,bx+28,by+42);
+    ctx.fillStyle=CO.mut; ctx.font='600 '+F(24); ctx.fillText(rr.present+' / '+rr.tot+' 到席',bx+28,by+74);
+    // 進度條
+    const pbx=bx+330, pbw=bw-330-140, pby=by+38, pbh=16;
+    ctx.fillStyle=CO.line; roundRect(ctx,pbx,pby,pbw,pbh,8); ctx.fill();
+    ctx.fillStyle=rr.rate>=80?CO.green:(rr.rate>=60?CO.gold:CO.red); roundRect(ctx,pbx,pby,pbw*rr.rate/100,pbh,8); ctx.fill();
+    ctx.fillStyle=CO.ink; ctx.font='900 '+F(40); ctx.textAlign='right'; ctx.fillText(rr.rate+'%',bx+bw-24,by+62); ctx.textAlign='left';
+    yy+=bh+22;
+  });
+
+  // 頁尾：產生日期（右下角，不壓內容）
+  ctx.fillStyle=CO.mut; ctx.font='500 '+F(24);
+  const now=new Date(); const stamp=now.getFullYear()+'/'+(now.getMonth()+1)+'/'+now.getDate();
+  ctx.textAlign='right';
+  ctx.fillText('產生於 '+stamp, W-60, yy+44);
+  ctx.textAlign='left';
+
+  // 下載
+  c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='出席戰報_'+title+'.png';a.click();},'image/png');
+}
+function regionLabel(){return region==='all'?'全區':region;}
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+</script>
+
 </body>
 </html>
