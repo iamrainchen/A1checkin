@@ -145,7 +145,7 @@
     <div class="eyebrow">A-TEAM 董顧大使團</div>
     <h1>月會現場報到</h1>
     <div class="msel" id="msel" onclick="openMeet()"><span class="d" id="mselD"></span><span id="mselN"></span><span class="ar">切換 ▾</span></div>
-    <div class="note">本人與代理都要收費 · 多支手機每 6 秒同步 · 已標記需確認才能取消</div>
+    <div class="note">點名字＝本人 · 按代理＝代理 · 都要收費 · 已標記者鎖定，長按可修改</div>
     <div class="banner" id="banner"></div>
     <div class="countbox">
       <div class="count"><span id="cIn">0</span><span class="total"> / <span id="cTot">0</span></span></div>
@@ -169,13 +169,15 @@
 <div class="toast" id="toast"></div>
 <div class="overlay" id="meet"><div class="sheet">
   <h3>選擇會議</h3>
+  <p style="margin:-2px 0 12px;font-size:12.5px;color:var(--muted)">點清單中的任一場即可切換（不必按下方建立）。</p>
   <div class="mlist" id="mlist"></div>
-  <div class="mnew"><label>建立新會議</label>
+  <button class="btn" id="newToggle" style="width:100%;margin-top:4px" onclick="toggleNew()">＋ 建立新會議</button>
+  <div class="mnew" id="mnewBox" style="display:none">
     <div class="rowi"><input type="date" id="newDate" style="max-width:150px"><input type="text" id="newName" placeholder="會議名稱，如 7月月會"></div>
     <button class="go" onclick="createMeeting()">建立並切換</button>
-    <button class="btn" style="width:100%;margin-top:8px" onclick="closeMeet()">取消</button>
-    <button class="btn" style="width:100%;margin-top:6px;color:var(--red);border-color:#F3CFC9" onclick="resetMeeting()">清空本場報到狀態</button>
   </div>
+  <button class="btn" style="width:100%;margin-top:8px" onclick="closeMeet()">關閉</button>
+  <button class="btn" style="width:100%;margin-top:6px;color:var(--red);border-color:#F3CFC9" onclick="resetMeeting()">清空本場報到狀態</button>
 </div></div>
 <div class="overlay" id="addov"><div class="sheet">
   <h3>新增名單外人員</h3>
@@ -191,6 +193,12 @@
   <div id="statsbody" style="max-height:62vh;overflow:auto"></div>
   <button class="btn" style="width:100%;margin-top:14px" onclick="closeStats()">關閉</button>
 </div></div>
+<div class="overlay" id="editov"><div class="sheet">
+  <h3 id="editName"></h3>
+  <p>修改這位的報到狀態：</p>
+  <div id="editOpts"></div>
+  <button class="btn" style="width:100%;margin-top:4px" onclick="closeEdit()">關閉</button>
+</div></div>
 <div class="overlay" id="staffov"><div class="sheet">
   <h3>你是哪位工作人員？</h3>
   <p>用來記錄由誰報到，之後可統計。清單來自試算表「工作人員」分頁。</p>
@@ -204,6 +212,8 @@ const REGION_ORDER=['北市北區','三五八蘆區','來賓'];
 const ROLE_ORDER=['大區董','區董','區董(準)','董顧','董顧/大使','大使','大使(準)','助理大使'];
 let MEETINGS=[], STAFF=[], PEOPLE=[], curId=null;
 let staff=localStorage.getItem('ateam_checkin_staff')||'', q='', suppressUntil=0;
+let pending={};  // 本機剛操作、等後端確認的項目，避免同步把它蓋回舊值
+let editIdx=null;
 const $=s=>document.querySelector(s);
 const notSet=()=>API.startsWith('請貼上');
 function nowHHMM(){const d=new Date(),p=n=>String(n).padStart(2,'0');return p(d.getHours())+':'+p(d.getMinutes());}
@@ -221,28 +231,62 @@ async function boot(){
     else{updateMsel();render();openMeet();}
   }catch(e){banner('連線失敗，請確認後端網址與部署權限');}
 }
-async function loadMeeting(){if(!curId)return;try{const d=await api({action:'meeting',id:curId});if(d.ok){PEOPLE=d.people;reindex();render();hideBanner();}}catch(e){}}
+async function loadMeeting(){if(!curId)return;try{const d=await api({action:'meeting',id:curId});if(!d.ok)return;
+  const now=Date.now();
+  d.people.forEach(sp=>{const pd=pending[sp.name];if(!pd)return;
+    const consistent=(sp.status===pd.status)&&(sp.paid===pd.paid);
+    if(consistent){delete pending[sp.name];return;}                   // 後端已跟上，解除保護
+    if(now>pd.until){delete pending[sp.name];return;}                 // 逾時放行，採用後端值
+    sp.status=pd.status;sp.paid=pd.paid;if(pd.time)sp.time=pd.time;    // 保護期內，一律保留本機值
+  });
+  PEOPLE=d.people;reindex();render();hideBanner();}catch(e){}}
 function poll(){if(!notSet()&&curId&&Date.now()>suppressUntil)loadMeeting();}
 
-/* 報到 / 代理 / 收費 —— 樂觀更新後送出 */
-function tapName(i){if(!staff){openStaff();return;}const p=PEOPLE[i];if(!p)return;let ns;
-  if(p.status==='本人'){if(!confirm('取消 '+p.name+' 的報到？'))return;ns='未到';}
-  else if(p.status==='代理'){ns='本人';}else ns='本人';
-  applyMark(p,ns);}
-function tapProxy(i){if(!staff){openStaff();return;}const p=PEOPLE[i];if(!p)return;let ns;
-  if(p.status==='代理'){if(!confirm('取消 '+p.name+' 的報到？'))return;ns='未到';}
-  else if(p.status==='本人'){ns='代理';}else ns='代理';
-  applyMark(p,ns);}
+/* 報到 / 代理 / 收費 —— 防誤觸：往前免確認；已標記者鎖住，需長按才能修改 */
+function tapName(i){if(!staff){openStaff();return;}const p=PEOPLE[i];if(!p)return;
+  if(p.status&&p.status!=='未到'){toast('已報到 · 長按可修改');return;}   // 已標記→鎖住
+  applyMark(p,'本人');}
+function tapProxy(i){if(!staff){openStaff();return;}const p=PEOPLE[i];if(!p)return;
+  if(p.status&&p.status!=='未到'){toast('已報到 · 長按可修改');return;}   // 已標記→鎖住
+  applyMark(p,'代理');}
+function tapPay(i){if(!staff){openStaff();return;}const p=PEOPLE[i];if(!p)return;
+  if(!p.status||p.status==='未到'){toast('請先報到（點名字＝本人、按代理＝代理）');return;}
+  if(p.paid){toast('已收費 · 長按名字可修改');return;}                    // 已收→鎖住
+  applyPay(p,true);}
 function applyMark(p,ns){
   p.status=ns;if(ns==='未到'){p.paid=false;p.time='';}else if(!p.time)p.time=nowHHMM();
-  suppressUntil=Date.now()+5000;render();
-  api({action:'mark',id:curId,name:p.name,status:ns,staff}).then(d=>{if(d.ok){PEOPLE=d.people;reindex();render();}}).catch(()=>banner('剛剛那筆未送出，系統會自動重試'));
+  pending[p.name]={status:p.status,paid:p.paid,time:p.time,until:Date.now()+15000};
+  suppressUntil=Date.now()+8000;render();
+  api({action:'mark',id:curId,name:p.name,status:ns,staff}).then(d=>{if(!d.ok)banner(d.error||'剛剛那筆未送出');else hideBanner();}).catch(()=>banner('連線不穩，稍後會自動同步'));
 }
-function tapPay(i){if(!staff){openStaff();return;}const p=PEOPLE[i];if(!p)return;
-  if(!p.status||p.status==='未到'){toast('請先標記本人或代理報到');return;}
-  if(p.paid&&!confirm('取消 '+p.name+' 的收費？'))return;
-  const np=!p.paid;p.paid=np;suppressUntil=Date.now()+5000;render();
-  api({action:'pay',id:curId,name:p.name,paid:np?'1':'0',staff}).then(d=>{if(d.ok){PEOPLE=d.people;reindex();render();}}).catch(()=>banner('剛剛那筆未送出，系統會自動重試'));
+function applyPay(p,val){
+  p.paid=val;
+  pending[p.name]={status:p.status,paid:p.paid,time:p.time,until:Date.now()+15000};
+  suppressUntil=Date.now()+8000;render();
+  api({action:'pay',id:curId,name:p.name,paid:val?'1':'0',staff}).then(d=>{if(!d.ok)banner(d.error||'剛剛那筆未送出');else hideBanner();}).catch(()=>banner('連線不穩，稍後會自動同步'));
+}
+
+/* 長按開啟修改選單（防誤觸：手滑不會觸發） */
+let holdTimer=null, holdId=null;
+function holdStart(i){holdId=i;clearTimeout(holdTimer);holdTimer=setTimeout(()=>{openEdit(i);},600);}
+function holdEnd(){clearTimeout(holdTimer);}
+function openEdit(i){const p=PEOPLE[i];if(!p||!p.status||p.status==='未到')return;
+  if(navigator.vibrate)navigator.vibrate(15);
+  editIdx=i;
+  $('#editName').textContent=p.name;
+  const opts=[];
+  if(p.status==='本人')opts.push(['改為代理','proxy']);
+  if(p.status==='代理')opts.push(['改為本人','self']);
+  opts.push([p.paid?'取消收費':'標記已收費','pay']);
+  opts.push(['取消報到（改未到）','cancel']);
+  $('#editOpts').innerHTML=opts.map(o=>'<button class="btn stbtn" onclick="doEdit(\''+o[1]+'\')">'+o[0]+'</button>').join('');
+  $('#editov').classList.add('show');}
+function closeEdit(){$('#editov').classList.remove('show');}
+function doEdit(act){const p=PEOPLE[editIdx];if(!p)return;closeEdit();
+  if(act==='proxy')applyMark(p,'代理');
+  else if(act==='self')applyMark(p,'本人');
+  else if(act==='pay')applyPay(p,!p.paid);
+  else if(act==='cancel')applyMark(p,'未到');
 }
 
 function render(){
@@ -272,7 +316,7 @@ function rowHtml(p){
   if(p.status&&p.status!=='未到')sp.push(p.paid?'<span class="paid">已收費</span>':'<span class="duetxt">需收費</span>');
   const proxyBtn='<button class="pbtn '+(p.status==='代理'?'pon':'')+'" onclick="event.stopPropagation();tapProxy('+p._i+')">代理</button>';
   const payBtn='<button class="pbtn '+((p.status&&p.status!=='未到')?(p.paid?'paid':'due'):'')+'" onclick="event.stopPropagation();tapPay('+p._i+')">'+(p.paid?'已收':'收費')+'</button>';
-  return '<div class="row '+cls+'" onclick="tapName('+p._i+')"><div class="tick">'+tick+'</div><div class="who"><div class="nm">'+p.name+'</div><div class="sub">'+sp.join('')+'</div></div><div class="acts">'+proxyBtn+payBtn+'</div></div>';
+  return '<div class="row '+cls+'" onclick="tapName('+p._i+')" ontouchstart="holdStart('+p._i+')" ontouchend="holdEnd()" ontouchmove="holdEnd()" onmousedown="holdStart('+p._i+')" onmouseup="holdEnd()" onmouseleave="holdEnd()"><div class="tick">'+tick+'</div><div class="who"><div class="nm">'+p.name+'</div><div class="sub">'+sp.join('')+'</div></div><div class="acts">'+proxyBtn+payBtn+'</div></div>';
 }
 function groupByRegion(arr){const map={};arr.forEach(p=>{(map[p.region]=map[p.region]||[]).push(p);});const names=Object.keys(map).sort((a,b)=>{const ia=REGION_ORDER.indexOf(a),ib=REGION_ORDER.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);});return names.map(n=>({name:n,items:map[n]}));}
 
@@ -304,7 +348,8 @@ function doAddPerson(){const n=$('#apName').value.trim();if(!n){alert('請填姓
 
 /* 會議 */
 function updateMsel(){const m=MEETINGS.find(x=>x.id===curId);if(m){$('#mselD').textContent=fmtD(m.date);$('#mselN').textContent=m.name;}else{$('#mselD').textContent='';$('#mselN').textContent='尚未建立會議';}}
-function openMeet(){renderMlist();const t=new Date();$('#newDate').value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');$('#newName').value='';$('#meet').classList.add('show');}
+function openMeet(){renderMlist();const t=new Date();$('#newDate').value=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');$('#newName').value='';$('#mnewBox').style.display='none';$('#newToggle').style.display='block';$('#meet').classList.add('show');}
+function toggleNew(){$('#mnewBox').style.display='block';$('#newToggle').style.display='none';}
 function closeMeet(){$('#meet').classList.remove('show');}
 function renderMlist(){$('#mlist').innerHTML=MEETINGS.length?MEETINGS.slice().reverse().map(m=>'<div class="mitem '+(m.id===curId?'cur':'')+'" onclick="selectMeeting(\''+m.id+'\')"><div><div class="mn">'+m.name+'</div><div class="ms">'+m.date+'</div></div><div class="cnt">'+(m.count||0)+'</div></div>').join(''):'<div class="empty" style="padding:16px">尚無會議，請於下方建立</div>';}
 function selectMeeting(id){curId=id;closeMeet();loadMeeting();}
