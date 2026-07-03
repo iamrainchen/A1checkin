@@ -191,7 +191,11 @@
 <div class="overlay" id="statsov"><div class="sheet" style="max-width:430px">
   <h3>本場統計</h3>
   <div id="statsbody" style="max-height:62vh;overflow:auto"></div>
-  <button class="btn" style="width:100%;margin-top:14px" onclick="closeStats()">關閉</button>
+  <div style="display:flex;gap:8px;margin-top:14px">
+    <button class="btn" style="flex:1" onclick="copyStatsText()">複製文字</button>
+    <button class="btn" style="flex:1;border-color:var(--gold);background:#FBF6EA;color:#9A7A2E" onclick="exportStatsCard()">存成圖卡</button>
+  </div>
+  <button class="btn" style="width:100%;margin-top:8px" onclick="closeStats()">關閉</button>
 </div></div>
 <div class="overlay" id="editov"><div class="sheet">
   <h3 id="editName"></h3>
@@ -329,7 +333,15 @@ function renderStats(){
   const P=PEOPLE,total=P.length,pres=p=>p.status&&p.status!=='未到';
   const self=P.filter(p=>p.status==='本人').length,proxy=P.filter(p=>p.status==='代理').length;
   const present=self+proxy,absent=total-present,paid=P.filter(p=>pres(p)&&p.paid).length;
-  let h='<div class="ssec">整體（應到 '+total+'）</div>';
+  // 未出席名單（完全未到），依五區分組，顯示 姓名 · 輔導分會
+  let h='<div class="ssec">未出席名單（'+absent+' 位）</div>';
+  const abs=P.filter(p=>!p.status||p.status==='未到');
+  if(abs.length===0){h+='<div style="font-size:13px;color:var(--present);font-weight:700;padding:6px 0 2px">全員到齊 🎉</div>';}
+  else{groupByRegion(abs).forEach(g=>{
+    h+='<div style="margin:8px 0 2px;font-size:12px;font-weight:700;color:var(--muted)">'+g.name+'（'+g.items.length+'）</div>';
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px">'+g.items.map(p=>'<span style="display:inline-flex;align-items:baseline;gap:4px;background:#FBEEEC;border:1px solid #F3CFC9;border-radius:8px;padding:4px 9px;font-size:13px"><b style="color:#1B1B1A;font-weight:700">'+p.name+'</b><span style="color:var(--muted);font-size:11px">'+(p.chapter||'')+'</span></span>').join('')+'</div>';
+  });}
+  h+='<div class="ssec">整體（應到 '+total+'）</div>';
   h+=srow('總出席率',present,total)+srow('本人出席',self,total)+srow('代理出席',proxy,total)+srow('缺席',absent,total);
   h+='<div class="ssec">各區出席率</div>';groupByRegion(P).forEach(g=>{h+=srow(g.name,g.items.filter(pres).length,g.items.length);});
   h+='<div class="ssec">各職稱出席率</div>';const roles={};P.forEach(p=>{(roles[p.role]=roles[p.role]||[]).push(p);});
@@ -340,6 +352,87 @@ function renderStats(){
 }
 
 /* 名單外新增 */
+/* ── 本場統計 匯出（文字 / 圖卡）── */
+function statsData(){
+  const P=PEOPLE,total=P.length,pres=p=>p.status&&p.status!=='未到';
+  const self=P.filter(p=>p.status==='本人').length,proxy=P.filter(p=>p.status==='代理').length;
+  const present=self+proxy,absent=total-present;
+  const m=MEETINGS.find(x=>x.id===curId)||{date:'',name:'本場'};
+  const regions=groupByRegion(P).map(g=>({name:g.name,present:g.items.filter(pres).length,tot:g.items.length}));
+  const roles={};P.forEach(p=>{(roles[p.role]=roles[p.role]||[]).push(p);});
+  const roleRows=Object.keys(roles).sort((a,b)=>{const ia=ROLE_ORDER.indexOf(a),ib=ROLE_ORDER.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);}).map(r=>({name:r||'其他',present:roles[r].filter(pres).length,tot:roles[r].length}));
+  const absList=groupByRegion(P.filter(p=>!p.status||p.status==='未到')).map(g=>({name:g.name,people:g.items.map(p=>p.name+(p.chapter?'（'+p.chapter+'）':''))}));
+  const pc=(n,d)=>d?Math.round(n/d*100):0;
+  return {m,total,self,proxy,present,absent,rate:pc(present,total),regions,roleRows,absList,pc};
+}
+function statsText(){
+  const d=statsData();
+  let t='📋 '+d.m.name+'　'+d.m.date+'\n';
+  t+='─────────────\n';
+  t+='應到 '+d.total+'　實到 '+d.present+'　出席率 '+d.rate+'%\n';
+  t+='本人 '+d.self+'　代理 '+d.proxy+'　未到 '+d.absent+'\n\n';
+  t+='【各區出席率】\n';
+  d.regions.forEach(r=>{t+='· '+r.name+' '+r.present+'/'+r.tot+'（'+d.pc(r.present,r.tot)+'%）\n';});
+  t+='\n【未出席名單 '+d.absent+' 位】\n';
+  if(d.absent===0)t+='全員到齊 🎉\n';
+  else d.absList.forEach(g=>{if(g.people.length)t+='◆ '+g.name+'：'+g.people.join('、')+'\n';});
+  return t;
+}
+function copyStatsText(){const t=statsText();
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(()=>toast('已複製，可貼到 LINE')).catch(()=>fallbackCopy(t));}
+  else fallbackCopy(t);}
+function fallbackCopy(t){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('已複製，可貼到 LINE');}catch(e){alert(t);}document.body.removeChild(ta);}
+
+function exportStatsCard(){
+  const d=statsData();
+  const W=1080,dpr=2,pad=60;
+  // 預估高度
+  const H = 300 + 170 + 70 + d.regions.length*54 + 90 + d.absList.reduce((a,g)=>a+(g.people.length?60:0),0) + 80;
+  const c=document.createElement('canvas'),ctx=c.getContext('2d');
+  c.width=W*dpr;c.height=H*dpr;ctx.scale(dpr,dpr);
+  const CO={bg:'#FAFAF7',card:'#FFFFFF',ink:'#1B1B1A',mut:'#8C887E',line:'#ECE8DF',gold:'#C9A24B',green:'#1FA463',proxy:'#C9862B',red:'#C8102E'};
+  const FT=w=>w+"px 'Noto Sans TC',sans-serif";
+  ctx.fillStyle=CO.bg;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=CO.gold;ctx.fillRect(0,0,W,10);
+  ctx.fillStyle=CO.gold;ctx.font='700 '+FT(26);ctx.fillText('A-TEAM 董顧大使團',pad,78);
+  ctx.fillStyle=CO.ink;ctx.font='900 '+FT(54);ctx.fillText(d.m.name,pad,144);
+  ctx.fillStyle=CO.mut;ctx.font='500 '+FT(28);ctx.fillText(d.m.date+'　現場報到統計',pad,188);
+  // 大數字列
+  ctx.font='800 '+FT(30);
+  ctx.fillStyle=CO.mut;ctx.fillText('應到 ',pad,244);let x=pad+ctx.measureText('應到 ').width;
+  ctx.fillStyle=CO.ink;ctx.fillText(d.total+'　',x,244);x+=ctx.measureText(d.total+'　').width;
+  ctx.fillStyle=CO.mut;ctx.fillText('實到 ',x,244);x+=ctx.measureText('實到 ').width;
+  ctx.fillStyle=CO.green;ctx.fillText(d.present+'　',x,244);x+=ctx.measureText(d.present+'　').width;
+  ctx.fillStyle=CO.mut;ctx.fillText('出席率 ',x,244);x+=ctx.measureText('出席率 ').width;
+  ctx.fillStyle=CO.green;ctx.fillText(d.rate+'%',x,244);
+  // 三宮格
+  const gy=280,gap=24,gw=(W-pad*2-gap*2)/3,gh=150;
+  [['本人',d.self,CO.green],['代理',d.proxy,CO.proxy],['未到',d.absent,CO.red]].forEach((cell,i)=>{
+    const cx=pad+i*(gw+gap);roundRect(ctx,cx,gy,gw,gh,18);ctx.fillStyle=CO.card;ctx.fill();ctx.strokeStyle=CO.line;ctx.stroke();
+    ctx.fillStyle=cell[2];ctx.font='900 '+FT(66);ctx.textAlign='center';ctx.fillText(cell[1],cx+gw/2,gy+86);
+    ctx.fillStyle=CO.mut;ctx.font='700 '+FT(26);ctx.fillText(cell[0],cx+gw/2,gy+124);ctx.textAlign='left';});
+  let yy=gy+gh+56;
+  const secTitle=(t)=>{ctx.fillStyle=CO.ink;ctx.font='800 '+FT(30);ctx.fillText(t,pad,yy);yy+=44;};
+  const bar=(name,pres,tot)=>{const pc=tot?Math.round(pres/tot*100):0;
+    ctx.fillStyle=CO.ink;ctx.font='700 '+FT(28);ctx.fillText(name,pad,yy+6);
+    ctx.fillStyle=CO.mut;ctx.font='500 '+FT(24);ctx.textAlign='right';ctx.fillText(pres+'/'+tot,W-pad-90,yy+6);
+    ctx.fillStyle=(pc>=80?CO.green:pc>=60?CO.gold:CO.red);ctx.font='800 '+FT(30);ctx.fillText(pc+'%',W-pad,yy+6);ctx.textAlign='left';
+    const tx=pad+180,tw=W-pad-180-160;ctx.fillStyle=CO.line;roundRect(ctx,tx,yy-14,tw,12,6);ctx.fill();
+    ctx.fillStyle=(pc>=80?CO.green:pc>=60?CO.gold:CO.red);roundRect(ctx,tx,yy-14,tw*pc/100,12,6);ctx.fill();
+    yy+=54;};
+  secTitle('各區出席率');d.regions.forEach(r=>bar(r.name,r.present,r.tot));yy+=16;
+  secTitle('未出席名單（'+d.absent+' 位）');
+  if(d.absent===0){ctx.fillStyle=CO.green;ctx.font='700 '+FT(28);ctx.fillText('全員到齊 🎉',pad,yy);yy+=54;}
+  else d.absList.forEach(g=>{if(!g.people.length)return;
+    ctx.fillStyle=CO.red;ctx.font='700 '+FT(26);ctx.fillText('◆ '+g.name,pad,yy);
+    ctx.fillStyle=CO.ink;ctx.font='500 '+FT(26);
+    const names=g.people.join('、');wrapText(ctx,names,pad+150,yy,W-pad-150-pad,38);
+    yy+=Math.max(1,Math.ceil(ctx.measureText(names).width/(W-pad-150-pad)))*38+18;});
+  c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='本場統計_'+d.m.name+'.png';a.click();},'image/png');
+}
+function wrapText(ctx,text,x,y,maxW,lh){const chars=text.split('');let line='',yy=y;for(let i=0;i<chars.length;i++){const t=line+chars[i];if(ctx.measureText(t).width>maxW&&line){ctx.fillText(line,x,yy);line=chars[i];yy+=lh;}else line=t;}ctx.fillText(line,x,yy);}
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
 function openAdd(){if(!staff){openStaff();return;}if(!curId){toast('請先選擇會議');return;}$('#apName').value='';$('#apChapter').value='';$('#apRole').value='';$('#apRegion').value='鴻毅區';$('#addov').classList.add('show');}
 function closeAdd(){$('#addov').classList.remove('show');}
 function doAddPerson(){const n=$('#apName').value.trim();if(!n){alert('請填姓名');return;}
