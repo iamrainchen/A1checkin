@@ -385,19 +385,28 @@ function fallbackCopy(t){const ta=document.createElement('textarea');ta.value=t;
 
 function exportStatsCard(){
   const d=statsData();
-  const W=1080,dpr=2,pad=60;
-  // 預估高度
-  const H = 300 + 170 + 70 + d.regions.length*54 + 90 + d.absList.reduce((a,g)=>a+(g.people.length?60:0),0) + 80;
+  const W=1080,pad=60,dpr=2;
+  const FT=w=>w+"px 'Noto Sans TC',sans-serif";
+  // ── 先用量測用 context 算「未出席名單」實際需要的高度 ──
+  const meas=document.createElement('canvas').getContext('2d');
+  const nameMaxW=W-pad-150-pad;
+  function linesOf(text){meas.font='500 '+FT(26);let line='',n=1;for(const ch of text.split('')){const t=line+ch;if(meas.measureText(t).width>nameMaxW&&line){n++;line=ch;}else line=t;}return n;}
+  let absH=0;
+  if(d.absent===0)absH=54;
+  else d.absList.forEach(g=>{if(g.people.length)absH+=linesOf(g.people.join('、'))*38+18;});
+
+  // ── 精準總高度 ──
+  const headH=280, gridH=170+56, regTitleH=44, regH=d.regions.length*54+16, absTitleH=44, footH=90;
+  const H = headH + gridH + regTitleH + regH + absTitleH + absH + footH;
+
   const c=document.createElement('canvas'),ctx=c.getContext('2d');
   c.width=W*dpr;c.height=H*dpr;ctx.scale(dpr,dpr);
   const CO={bg:'#FAFAF7',card:'#FFFFFF',ink:'#1B1B1A',mut:'#8C887E',line:'#ECE8DF',gold:'#C9A24B',green:'#1FA463',proxy:'#C9862B',red:'#C8102E'};
-  const FT=w=>w+"px 'Noto Sans TC',sans-serif";
   ctx.fillStyle=CO.bg;ctx.fillRect(0,0,W,H);
   ctx.fillStyle=CO.gold;ctx.fillRect(0,0,W,10);
   ctx.fillStyle=CO.gold;ctx.font='700 '+FT(26);ctx.fillText('A-TEAM 董顧大使團',pad,78);
   ctx.fillStyle=CO.ink;ctx.font='900 '+FT(54);ctx.fillText(d.m.name,pad,144);
   ctx.fillStyle=CO.mut;ctx.font='500 '+FT(28);ctx.fillText(d.m.date+'　現場報到統計',pad,188);
-  // 大數字列
   ctx.font='800 '+FT(30);
   ctx.fillStyle=CO.mut;ctx.fillText('應到 ',pad,244);let x=pad+ctx.measureText('應到 ').width;
   ctx.fillStyle=CO.ink;ctx.fillText(d.total+'　',x,244);x+=ctx.measureText(d.total+'　').width;
@@ -405,7 +414,6 @@ function exportStatsCard(){
   ctx.fillStyle=CO.green;ctx.fillText(d.present+'　',x,244);x+=ctx.measureText(d.present+'　').width;
   ctx.fillStyle=CO.mut;ctx.fillText('出席率 ',x,244);x+=ctx.measureText('出席率 ').width;
   ctx.fillStyle=CO.green;ctx.fillText(d.rate+'%',x,244);
-  // 三宮格
   const gy=280,gap=24,gw=(W-pad*2-gap*2)/3,gh=150;
   [['本人',d.self,CO.green],['代理',d.proxy,CO.proxy],['未到',d.absent,CO.red]].forEach((cell,i)=>{
     const cx=pad+i*(gw+gap);roundRect(ctx,cx,gy,gw,gh,18);ctx.fillStyle=CO.card;ctx.fill();ctx.strokeStyle=CO.line;ctx.stroke();
@@ -426,11 +434,11 @@ function exportStatsCard(){
   else d.absList.forEach(g=>{if(!g.people.length)return;
     ctx.fillStyle=CO.red;ctx.font='700 '+FT(26);ctx.fillText('◆ '+g.name,pad,yy);
     ctx.fillStyle=CO.ink;ctx.font='500 '+FT(26);
-    const names=g.people.join('、');wrapText(ctx,names,pad+150,yy,W-pad-150-pad,38);
-    yy+=Math.max(1,Math.ceil(ctx.measureText(names).width/(W-pad-150-pad)))*38+18;});
+    const names=g.people.join('、');const n=wrapText(ctx,names,pad+150,yy,nameMaxW,38);
+    yy+=n*38+18;});
   c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='本場統計_'+d.m.name+'.png';a.click();},'image/png');
 }
-function wrapText(ctx,text,x,y,maxW,lh){const chars=text.split('');let line='',yy=y;for(let i=0;i<chars.length;i++){const t=line+chars[i];if(ctx.measureText(t).width>maxW&&line){ctx.fillText(line,x,yy);line=chars[i];yy+=lh;}else line=t;}ctx.fillText(line,x,yy);}
+function wrapText(ctx,text,x,y,maxW,lh){const chars=text.split('');let line='',yy=y,n=1;for(let i=0;i<chars.length;i++){const t=line+chars[i];if(ctx.measureText(t).width>maxW&&line){ctx.fillText(line,x,yy);line=chars[i];yy+=lh;n++;}else line=t;}ctx.fillText(line,x,yy);return n;}
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
 
 function openAdd(){if(!staff){openStaff();return;}if(!curId){toast('請先選擇會議');return;}$('#apName').value='';$('#apChapter').value='';$('#apRole').value='';$('#apRegion').value='鴻毅區';$('#addov').classList.add('show');}
