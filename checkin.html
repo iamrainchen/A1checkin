@@ -184,7 +184,7 @@
   <p>只加入這一場、不影響主名單，加入後自動標記本人到。</p>
   <input id="apName" placeholder="姓名（必填）">
   <div style="display:flex;gap:8px"><input id="apChapter" placeholder="分會（選填）"><input id="apRole" placeholder="職稱（選填）"></div>
-  <select id="apRegion"><option>三五八蘆區</option><option>北市北區</option><option>來賓</option></select>
+  <select id="apRegion"><option>鴻毅區</option><option>愛珠區</option><option>成育區</option><option>麗惠區</option><option>文婷區</option><option>來賓</option></select>
   <button class="go" onclick="doAddPerson()">新增並報到</button>
   <button class="btn" style="width:100%;margin-top:8px" onclick="closeAdd()">取消</button>
 </div></div>
@@ -208,7 +208,7 @@
 /* ===== 貼上你的 Apps Script 部署網址（/exec 結尾）===== */
 const API = "https://script.google.com/macros/s/AKfycbw5PYdytxOWpFbqOoICpeGPxx_T58p_fvjNRxbqk_9t_ur-LdYBOuo_SnGQEOv83AyP/exec";
 
-const REGION_ORDER=['北市北區','三五八蘆區','來賓'];
+const REGION_ORDER=['鴻毅區','愛珠區','成育區','麗惠區','文婷區','來賓'];
 const ROLE_ORDER=['大區董','區董','區董(準)','董顧','董顧/大使','大使','大使(準)','助理大使'];
 let MEETINGS=[], STAFF=[], PEOPLE=[], curId=null;
 let staff=localStorage.getItem('ateam_checkin_staff')||'', q='', suppressUntil=0;
@@ -330,7 +330,6 @@ function renderStats(){
   const present=self+proxy,absent=total-present,paid=P.filter(p=>pres(p)&&p.paid).length;
   let h='<div class="ssec">整體（應到 '+total+'）</div>';
   h+=srow('總出席率',present,total)+srow('本人出席',self,total)+srow('代理出席',proxy,total)+srow('缺席',absent,total);
-  h+='<div class="ssec">收費</div>'+srow('收費完成',paid,present);
   h+='<div class="ssec">各區出席率</div>';groupByRegion(P).forEach(g=>{h+=srow(g.name,g.items.filter(pres).length,g.items.length);});
   h+='<div class="ssec">各職稱出席率</div>';const roles={};P.forEach(p=>{(roles[p.role]=roles[p.role]||[]).push(p);});
   Object.keys(roles).sort((a,b)=>{const ia=ROLE_ORDER.indexOf(a),ib=ROLE_ORDER.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);}).forEach(r=>{const a=roles[r];h+=srow(r||'其他',a.filter(pres).length,a.length);});
@@ -340,7 +339,7 @@ function renderStats(){
 }
 
 /* 名單外新增 */
-function openAdd(){if(!staff){openStaff();return;}if(!curId){toast('請先選擇會議');return;}$('#apName').value='';$('#apChapter').value='';$('#apRole').value='';$('#apRegion').value='三五八蘆區';$('#addov').classList.add('show');}
+function openAdd(){if(!staff){openStaff();return;}if(!curId){toast('請先選擇會議');return;}$('#apName').value='';$('#apChapter').value='';$('#apRole').value='';$('#apRegion').value='鴻毅區';$('#addov').classList.add('show');}
 function closeAdd(){$('#addov').classList.remove('show');}
 function doAddPerson(){const n=$('#apName').value.trim();if(!n){alert('請填姓名');return;}
   suppressUntil=Date.now()+5000;
