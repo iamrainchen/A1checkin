@@ -62,7 +62,7 @@
   <div class="src demo" id="src">目前顯示範例資料（尚未連線）· 接上報到記錄後即為真實數據</div>
   <div class="filters">
     <select id="fRange"><option value="all">全部場次</option><option value="6">近 6 場</option><option value="3">近 3 場</option></select>
-    <select id="fRegion"><option value="all">全部區域</option><option value="北市北區">北市北區</option><option value="三五八蘆區">三五八蘆區</option></select>
+    <select id="fRegion"><option value="all">全部區域</option><option value="鴻毅區">鴻毅區</option><option value="愛珠區">愛珠區</option><option value="成育區">成育區</option><option value="麗惠區">麗惠區</option><option value="文婷區">文婷區</option></select>
     <button id="btnCard" onclick="exportCard()" style="border:1px solid var(--gold);background:#FBF6EA;color:#9A7A2E;border-radius:11px;padding:10px 15px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">📤 匯出圖卡</button>
   </div>
   <div class="kpis" id="kpis"></div>
@@ -72,7 +72,7 @@
     <div class="card"><h3>逐場到席率 · 兩區對照</h3><div class="cbox"><canvas id="cRegTrend"></canvas></div></div>
     <div class="card"><h3>本人 / 代理 / 未到（逐場人數）</h3><div class="cbox"><canvas id="cStack"></canvas></div></div>
     <div class="card"><h3>各職稱出席率</h3><div class="cbox"><canvas id="cRole"></canvas></div></div>
-    <div class="card full"><h3>各分會董顧大使團 · 出席率 <span class="tlegend"><i style="background:#1FA463"></i>≥80%　<i style="background:#E3B341"></i>60–79%　<i style="background:#C8102E"></i>&lt;60%</span></h3><div id="chGrid" class="chgrid"></div></div>
+    <div class="card full"><h3><span id="chTitle">各分會董顧大使團 · 出席率</span> <span class="tlegend"><i style="background:#1FA463"></i>≥80%　<i style="background:#E3B341"></i>60–79%　<i style="background:#C8102E"></i>&lt;60%</span></h3><div id="chGrid" class="chgrid"></div></div>
   </div>
   <div class="card full" style="margin-top:14px">
     <h3>個人出席率明細</h3>
@@ -84,7 +84,63 @@
 <script>
 const API = "https://script.google.com/macros/s/AKfycbw5PYdytxOWpFbqOoICpeGPxx_T58p_fvjNRxbqk_9t_ur-LdYBOuo_SnGQEOv83AyP/exec";  /* 之後貼上「報到記錄」的 Apps Script 網址（?action=records 回傳所有列）。留空＝範例資料 */
 const RAW = [
-["北市北區","","大區董","楊日陞"],["北市北區","長和/長城","董顧/大使","曾惠君"],["北市北區","長城","助理大使","謝宥騏"],["北市北區","長和","大使","張婉婧"],["北市北區","長佑","董顧","陳麗惠"],["北市北區","長佑","大使","張煥晨"],["北市北區","長佑","助理大使","謝雯筑"],["北市北區","長翼","董顧","廖筱蘭"],["北市北區","長翼","大使","劉宜賢"],["北市北區","長翼","助理大使","蔡佩玲"],["北市北區","長悅","董顧","鍾坤宏"],["北市北區","長悅","大使","劉宸緯"],["北市北區","長翔","董顧","詹鴻鵠"],["北市北區","長翔","大使","葉炘然"],["北市北區","長翔","助理大使","郭亭君"],["北市北區","長輝","董顧","游姿菱"],["北市北區","長輝","助理大使","林昱璋"],["北市北區","長利","董顧","張文婷"],["北市北區","長利","大使","郭家宏"],["北市北區","長利","助理大使","蘇彥宇"],["三五八蘆區","三蘆區執行長金鈺/金利/金合/金虎","區董(準)","郭愛珠"],["三五八蘆區","金鈺","大使","王定廣"],["三五八蘆區","金鈺","助理大使","黃湍淳"],["三五八蘆區","金利","大使(準)","蔡馨葳"],["三五八蘆區","金利","助理大使","方榮久"],["三五八蘆區","金虎","董顧","蕭淑蓉"],["三五八蘆區","金虎","大使","陳宥寧"],["三五八蘆區","金虎","助理大使","劉芯怡"],["三五八蘆區","金合","董顧","洪岳裕"],["三五八蘆區","金合","大使","廖羿為"],["三五八蘆區","金合","助理大使","吳宜靜"],["三五八蘆區","三蘆區 金暘/金美/金盟/金鑫/金安","區董","李鴻毅"],["三五八蘆區","金暘","董顧","王彥萍"],["三五八蘆區","金暘","助理大使","李佳家"],["三五八蘆區","金美","董顧","張松源"],["三五八蘆區","金美","大使","楊哲瑋"],["三五八蘆區","金美","助理大使","邱偉綸"],["三五八蘆區","金美","助理大使","王思穎"],["三五八蘆區","金安","董顧","陳沛緹"],["三五八蘆區","金安","大使","張紘賓"],["三五八蘆區","金安","助理大使","楊榮峯"],["三五八蘆區","金鑫","董顧","張力文"],["三五八蘆區","金鑫","大使","陳子雯"],["三五八蘆區","金鑫","助理大使","楊先震"],["三五八蘆區","金盟","董顧","周玉茹"],["三五八蘆區","金盟","大使","邱耀賢"],["三五八蘆區","金盟","助理大使","莊博全"],["三五八蘆區","金盟","助理大使","王柏堯"],["三五八蘆區","三蘆區 金佑/金澎湃/金英","區董(準)","孫成育"],["三五八蘆區","金佑","董顧","王執定"],["三五八蘆區","金佑","大使","曾士銘"],["三五八蘆區","金佑","助理大使","洪儀君"],["三五八蘆區","金澎湃","董顧","江學洋"],["三五八蘆區","金澎湃","大使","駱湘樺"],["三五八蘆區","金澎湃","助理大使","陳夗媃"],["三五八蘆區","金英","董顧","李赫茗"],["三五八蘆區","金英","大使","劉玓岡"],["三五八蘆區","金英","助理大使","林澐薪"]
+["麗惠區","長和/長城","董顧/大使","曾惠君"],
+["麗惠區","長城","助理大使","謝宥騏"],
+["麗惠區","長和","大使","張婉婧"],
+["麗惠區","長佑","董顧","陳麗惠"],
+["麗惠區","長佑","大使","張煥晨"],
+["麗惠區","長佑","助理大使","謝雯筑"],
+["文婷區","長翼","董顧","廖筱蘭"],
+["文婷區","長翼","大使","劉宜賢"],
+["文婷區","長翼","助理大使","蔡佩玲"],
+["文婷區","長悅","董顧","鍾坤宏"],
+["文婷區","長悅","大使","劉宸緯"],
+["麗惠區","長翔","董顧","詹鴻鵠"],
+["麗惠區","長翔","大使","葉炘然"],
+["麗惠區","長翔","助理大使","郭亭君"],
+["文婷區","長輝","董顧","游姿菱"],
+["文婷區","長輝","助理大使","林昱璋"],
+["文婷區","長利","董顧","張文婷"],
+["文婷區","長利","大使","郭家宏"],
+["文婷區","長利","助理大使","蘇彥宇"],
+["愛珠區","三蘆區執行長金鈺/金利/金合/金虎","區董(準)","郭愛珠"],
+["愛珠區","金鈺","大使","王定廣"],
+["愛珠區","金鈺","助理大使","黃湍淳"],
+["愛珠區","金利","大使(準)","蔡馨葳"],
+["愛珠區","金利","助理大使","方榮久"],
+["愛珠區","金虎","董顧","蕭淑蓉"],
+["愛珠區","金虎","大使","陳宥寧"],
+["愛珠區","金虎","助理大使","劉芯怡"],
+["愛珠區","金合","董顧","洪岳裕"],
+["愛珠區","金合","大使","廖羿為"],
+["愛珠區","金合","助理大使","吳宜靜"],
+["鴻毅區","三蘆區 金暘/金美/金盟/金鑫/金安","區董","李鴻毅"],
+["鴻毅區","金暘","董顧","王彥萍"],
+["鴻毅區","金暘","助理大使","李佳家"],
+["鴻毅區","金美","董顧","張松源"],
+["鴻毅區","金美","大使","楊哲瑋"],
+["鴻毅區","金美","助理大使","邱偉綸"],
+["鴻毅區","金美","助理大使","王思穎"],
+["鴻毅區","金安","董顧","陳沛緹"],
+["鴻毅區","金安","大使","張紘賓"],
+["鴻毅區","金安","助理大使","楊榮峯"],
+["鴻毅區","金鑫","董顧","張力文"],
+["鴻毅區","金鑫","大使","陳子雯"],
+["鴻毅區","金鑫","助理大使","楊先震"],
+["鴻毅區","金盟","董顧","周玉茹"],
+["鴻毅區","金盟","大使","邱耀賢"],
+["鴻毅區","金盟","助理大使","莊博全"],
+["鴻毅區","金盟","助理大使","王柏堯"],
+["成育區","三蘆區 金佑/金澎湃/金英","區董(準)","孫成育"],
+["成育區","金佑","董顧","王執定"],
+["成育區","金佑","大使","曾士銘"],
+["成育區","金佑","助理大使","洪儀君"],
+["成育區","金澎湃","董顧","江學洋"],
+["成育區","金澎湃","大使","駱湘樺"],
+["成育區","金澎湃","助理大使","陳夗媃"],
+["成育區","金英","董顧","李赫茗"],
+["成育區","金英","大使","劉玓岡"],
+["成育區","金英","助理大使","林澐薪"]
 ];
 const ROSTER = RAW.map(a=>({region:a[0],chapter:a[1],role:a[2],name:a[3]}));
 const ROLE_ORDER=['大區董','區董','區董(準)','董顧','董顧/大使','大使','大使(準)','助理大使'];
@@ -163,10 +219,11 @@ function draw(){
   const chMap={},chOrder=[];recs.forEach(r=>{if(isLead(r.role))return;const k=r.chapter||'其他';if(!(k in chMap)){chMap[k]=[];chOrder.push(k);}chMap[k].push(r);});
   const chData=chOrder.map(k=>({k,att:chMap[k].filter(r=>r.status!=='未到').length,tot:chMap[k].length,rate:pct(chMap[k].filter(r=>r.status!=='未到').length,chMap[k].length)})).sort((a,b)=>b.rate-a.rate);
   const tierCls=r=> r>=80?'g':(r>=60?'y':'r');
+  document.getElementById('chTitle').textContent = (region==='all') ? '各分會董顧大使團 · 出席率' : (region+' · 各分會出席率');
   document.getElementById('chGrid').innerHTML=chData.map(x=>'<div class="chtile '+tierCls(x.rate)+'"><div class="cn">'+x.k+'</div><div class="cr">'+x.rate+'%</div><div class="cs">'+x.att+'/'+x.tot+' 到席</div></div>').join('');
 
   /* 區域比較（固定兩區，依日期範圍，不受區域下拉影響）*/
-  const REGIONS=['北市北區','三五八蘆區'],RCOL={'北市北區':C.gold,'三五八蘆區':C.present};
+  const REGIONS=['鴻毅區','愛珠區','成育區','麗惠區','文婷區'],RCOL={'鴻毅區':'#C8102E','愛珠區':C.gold,'成育區':C.present,'麗惠區':'#C9862B','文婷區':'#5B8DEF'};
   const rkeys=new Set(ms.map(m=>m.key));
   const regAll=DATA.filter(r=>rkeys.has(r.date+'|'+r.meeting));
   const RA=REGIONS.map(reg=>{const rr=regAll.filter(r=>r.region===reg);const tot=rr.length,self=rr.filter(r=>r.status==='本人').length,proxy=rr.filter(r=>r.status==='代理').length,present=self+proxy,paid=rr.filter(r=>r.status!=='未到'&&r.paid==='已收').length;return {tot,self,proxy,present,paid};});
@@ -219,14 +276,14 @@ function exportCard(){
   if(range.indexOf('m:')===0){const m=ms[0];title=m.meeting;sub=m.date;}
   else{title=(regionLabel())+' 出席戰報';sub=ms.length+' 場（'+ms[0].date+' ~ '+ms[ms.length-1].date+'）';}
   // 各區
-  const REGIONS=['北市北區','三五八蘆區'];
+  const REGIONS=['鴻毅區','愛珠區','成育區','麗惠區','文婷區'];
   const regRows=REGIONS.map(rg=>{const rr=recs.filter(r=>r.region===rg);const p=rr.filter(r=>r.status!=='未到').length;return {name:rg,present:p,tot:rr.length,rate:rr.length?Math.round(p/rr.length*100):0};}).filter(x=>x.tot>0);
 
   // ---- 畫布 ----
   const W=1080, dpr=2;
   const c=document.createElement('canvas');
   const ctx=c.getContext('2d');
-  const H = 610 + regRows.length*130 + 120;
+  const H = 560 + regRows.length*130 + 120;
   c.width=W*dpr; c.height=H*dpr; ctx.scale(dpr,dpr);
   const CO={bg:'#FAFAF7',card:'#FFFFFF',ink:'#1B1B1A',mut:'#8C887E',line:'#ECE8DF',gold:'#C9A24B',green:'#1FA463',proxy:'#C9862B',red:'#C8102E'};
   // 底
@@ -260,24 +317,23 @@ function exportCard(){
     ctx.fillStyle=CO.mut; ctx.fillText('   ·   共 '+ms.length+' 場',wx,246);
   }
 
-  // 大數字四宮格
-  const gx=60, gy=286, gw=(W-120-30)/2, gh=150;
+  // 大數字三宮格（一排三格）
+  const gx=60, gy=286, gap=24, gw=(W-120-gap*2)/3, gh=170;
   const cells=[
     ['總到席率',rate(present)+'%',CO.green],
     ['本人出席率',rate(self)+'%',CO.green],
-    ['代理',proxy+' 位',CO.proxy],
-    ['收費完成率',payRate+'%',CO.green]
+    ['代理',proxy+' 位',CO.proxy]
   ];
   cells.forEach((cell,i)=>{
-    const x=gx+(i%2)*(gw+30), y=gy+Math.floor(i/2)*(gh+22);
+    const x=gx+i*(gw+gap), y=gy;
     roundRect(ctx,x,y,gw,gh,20); ctx.fillStyle=CO.card; ctx.fill();
     ctx.strokeStyle=CO.line; ctx.lineWidth=1; ctx.stroke();
-    ctx.fillStyle=cell[2]; ctx.font='900 '+F(72); ctx.fillText(cell[1],x+30,y+92);
-    ctx.fillStyle=CO.mut; ctx.font='700 '+F(26); ctx.fillText(cell[0],x+30,y+128);
+    ctx.fillStyle=cell[2]; ctx.font='900 '+F(76); ctx.textAlign='center'; ctx.fillText(cell[1],x+gw/2,y+100);
+    ctx.fillStyle=CO.mut; ctx.font='700 '+F(27); ctx.fillText(cell[0],x+gw/2,y+140); ctx.textAlign='left';
   });
 
   // 各區
-  let yy=gy+2*gh+44+40;
+  let yy=gy+gh+40+40;
   ctx.fillStyle=CO.ink; ctx.font='800 '+F(30); ctx.fillText('各區出席率',60,yy); yy+=20;
   regRows.forEach(rr=>{
     const bx=60,bw=W-120,bh=96,by=yy;
