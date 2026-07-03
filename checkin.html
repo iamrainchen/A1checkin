@@ -224,6 +224,7 @@ function reindex(){PEOPLE.forEach((p,i)=>p._i=i);}
 async function boot(){
   if(notSet()){banner('尚未連線：請把後端 /exec 網址貼到本檔最上方的 const API');return;}
   showMe();
+  $('#list').innerHTML='<div class="empty">載入中…</div>';
   try{const d=await api({action:'bootstrap'});if(!d.ok){banner('後端回應異常：'+(d.error||''));return;}
     MEETINGS=d.meetings||[];STAFF=d.staff||[];hideBanner();
     if(!staff)openStaff();
